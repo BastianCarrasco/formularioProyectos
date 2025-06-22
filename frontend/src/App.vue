@@ -2,32 +2,40 @@
 import { ref, onMounted, computed } from "vue";
 import "../src/assets/estilos.css";
 
+// Your environment variables
 const urlcuestionario = import.meta.env.VITE_API_URL_CUESTIONARIOS;
 const urlacademico = import.meta.env.VITE_API_URL_ACADEMICOS;
 const urlUA = import.meta.env.VITE_API_URL_UA;
 
-const isAcademico = ref(null);
-const selectedUnidadId = ref(null);
+// State variables
+const isAcademico = ref(null); // true for academic, false for external
+const selectedUnidadId = ref(null); // Selected unit for academics
 const showCuestionario = ref(false);
 const isSubmitting = ref(false);
 const submitSuccess = ref(false);
 const submitError = ref(false);
 const isLoading = ref(false);
 const loadError = ref(null);
-const showJsonData = ref(false);
-const isVerifyingEmail = ref(false);
+
+const isVerifyingEmail = ref(false); // Controls email verification step
 const emailVerificationError = ref(null);
 const email = ref("");
-const isNotInUA = ref(false);
-const notInUASuccess = ref(false);
+
+const isInternalAcademicRegistration = ref(false); // New state for internal registration form
+const internalRegistrationError = ref(null);
+const internalName = ref("");
+const internalAPaterno = ref("");
+const internalAMaterno = ref("");
+
+const isExternalRegistration = ref(false); // Controls external registration form
+const externalRegistrationSuccess = ref(false); // New: To show a brief success message after external registration
+const externalRegistrationError = ref(null);
 const externalName = ref("");
 const externalAPaterno = ref("");
 const externalAMaterno = ref("");
-const isExternalRegistration = ref(false);
-const externalRegistrationSuccess = ref(false);
-const externalRegistrationError = ref(null);
+
 const greetUser = ref(false);
-const academicoEncontrado = ref(null);
+const academicoEncontrado = ref(null); // Stores the found/registered academic's data
 
 const unidadesAcademicas = ref([]);
 const academicos = ref([]);
@@ -45,6 +53,7 @@ const nombreEscuelaSeleccionada = computed(() => {
   return unidad ? unidad.nombre : "";
 });
 
+// Function to load initial data (units, academics, questionnaire)
 async function cargarDatos() {
   try {
     isLoading.value = true;
@@ -70,16 +79,54 @@ async function cargarDatos() {
   }
 }
 
+// Load data when the component is mounted
 onMounted(cargarDatos);
 
+// Function to reset all relevant states to show the initial verification form
+const resetToInitialState = () => {
+  isAcademico.value = null;
+  selectedUnidadId.value = null;
+  showCuestionario.value = false;
+  isVerifyingEmail.value = false;
+  emailVerificationError.value = null;
+  email.value = "";
+  isInternalAcademicRegistration.value = false;
+  internalRegistrationError.value = null;
+  internalName.value = "";
+  internalAPaterno.value = "";
+  internalAMaterno.value = "";
+  isExternalRegistration.value = false;
+  externalRegistrationSuccess.value = false; // Reset this flag too for brief message
+  externalRegistrationError.value = null;
+  externalName.value = "";
+  externalAPaterno.value = "";
+  externalAMaterno.value = "";
+  greetUser.value = false;
+  academicoEncontrado.value = null;
+  submitSuccess.value = false; // Reset questionnaire submission success
+  submitError.value = false; // Reset questionnaire submission error
+};
+
+// Function to determine the next step based on user's choice (academic or not)
 const verificarAcceso = () => {
-  if (isAcademico.value === true && selectedUnidadId.value) {
+  greetUser.value = false; // Reset greeting on new access attempt
+  if (isAcademico.value === true) {
+    // If academic, proceed to email verification
     isVerifyingEmail.value = true;
+    isExternalRegistration.value = false; // Ensure external registration is hidden
+    isInternalAcademicRegistration.value = false; // Ensure internal registration is hidden
   } else if (isAcademico.value === false) {
+    // If not academic, proceed directly to external registration
     isExternalRegistration.value = true;
+    isVerifyingEmail.value = false; // Ensure email verification is hidden
+    isInternalAcademicRegistration.value = false; // Ensure internal registration is hidden
+    // Clear previous academic details if changing from academic path
+    academicoEncontrado.value = null;
+    email.value = "";
   }
 };
 
+// Function to verify email for existing academics
 const verificarEmail = () => {
   emailVerificationError.value = null;
   academicoEncontrado.value = academicos.value.find(
@@ -87,22 +134,86 @@ const verificarEmail = () => {
   );
 
   if (academicoEncontrado.value) {
+    // If email found, set selected unit if exists and show questionnaire
+    if (academicoEncontrado.value.id_unidad) {
+      selectedUnidadId.value = academicoEncontrado.value.id_unidad;
+    } else {
+      // If academic found but no unit, they must select one
+      selectedUnidadId.value = null; // Ensure no pre-selection if unit is null
+    }
     showCuestionario.value = true;
     isVerifyingEmail.value = false;
     greetUser.value = true;
   } else {
+    // If email not found for academic, prompt for internal registration
     emailVerificationError.value =
-      "Correo electrónico no encontrado. Por favor, inténtelo de nuevo o registre su información.";
-    isVerifyingEmail.value = false;
-    isNotInUA.value = true;
+      "Correo electrónico no encontrado en el cuerpo académico. Por favor, regístrese como académico interno.";
+    isVerifyingEmail.value = false; // Hide email verification
+    isInternalAcademicRegistration.value = true; // Show internal registration form
+    // Pre-fill internal email for convenience, clear other fields
+    internalName.value = "";
+    internalAPaterno.value = "";
+    internalAMaterno.value = "";
+    selectedUnidadId.value = null; // Ensure unit is selected by user
   }
 };
 
+// Function to register a new INTERNAL academic
+const registrarAcademicoInterno = async () => {
+  internalRegistrationError.value = null;
+  if (
+    !email.value ||
+    !internalName.value ||
+    !internalAPaterno.value ||
+    !selectedUnidadId.value
+  ) {
+    internalRegistrationError.value =
+      "Por favor, complete todos los campos obligatorios (Nombre, Apellido Paterno, Email y Unidad Académica).";
+    return;
+  }
+
+  const data = {
+    nombre: internalName.value,
+    email: email.value,
+    a_paterno: internalAPaterno.value,
+    a_materno: internalAMaterno.value,
+    id_unidad: selectedUnidadId.value, // Must provide id_unidad for internal academic
+  };
+
+  try {
+    isSubmitting.value = true;
+    const response = await fetch(urlacademico, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (response.ok) {
+      // Internal registration successful, now reload data and go back to initial screen
+      await cargarDatos(); // Reload academic list including the new one
+      alert("¡Registro como académico interno exitoso! Ahora puede continuar y acceder al cuestionario."); // User friendly message
+      resetToInitialState(); // Go back to the very first step
+    } else {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message || "Error al registrar académico interno"
+      );
+    }
+  } catch (error) {
+    console.error("Error al registrar académico interno:", error);
+    internalRegistrationError.value =
+      error.message || "Error al registrar. Por favor, inténtelo de nuevo.";
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+
+// Function to register a new EXTERNAL academic
 const registrarAcademicoExterno = async () => {
   externalRegistrationError.value = null;
   if (!email.value || !externalName.value || !externalAPaterno.value) {
     externalRegistrationError.value =
-      "Por favor, complete todos los campos obligatorios.";
+      "Por favor, complete todos los campos obligatorios (Nombre, Apellido Paterno, Email).";
     return;
   }
 
@@ -111,9 +222,11 @@ const registrarAcademicoExterno = async () => {
     email: email.value,
     a_paterno: externalAPaterno.value,
     a_materno: externalAMaterno.value,
+    id_unidad: null, // External academics don't belong to a specific unit initially
   };
 
   try {
+    isSubmitting.value = true;
     const response = await fetch(urlacademico, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -121,24 +234,28 @@ const registrarAcademicoExterno = async () => {
     });
 
     if (response.ok) {
-      const result = await response.json();
-      academicoEncontrado.value = result.data;
-      externalRegistrationSuccess.value = true;
-      isExternalRegistration.value = false;
-      greetUser.value = true;
-      showCuestionario.value = true;
+      // External registration successful, now reload data and go back to initial screen
+      await cargarDatos(); // Reload academic list (might not be strictly necessary for external, but safe)
+      alert("¡Registro como colaborador externo exitoso! Ahora puede continuar y acceder al cuestionario."); // User friendly message
+      resetToInitialState(); // Go back to the very first step
     } else {
-      throw new Error("Error al registrar académico externo");
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message || "Error al registrar académico externo"
+      );
     }
   } catch (error) {
     console.error("Error al registrar académico externo:", error);
     externalRegistrationError.value =
-      "Error al registrar. Por favor, inténtelo de nuevo.";
+      error.message || "Error al registrar. Por favor, inténtelo de nuevo.";
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
+// Generates the data payload for the questionnaire submission
 const generatePostData = () => {
-  // Procesar las respuestas para convertir null/undefined a ""
+  // Process answers to convert null/undefined to ""
   const respuestasProcesadas = formData.value.respuestas.map((respuesta) =>
     respuesta === null || respuesta === undefined ? "" : respuesta
   );
@@ -147,25 +264,29 @@ const generatePostData = () => {
     nombre_investigador: academicoEncontrado.value
       ? academicoEncontrado.value.id_academico
       : null,
+    // Use the selectedUnidadId, which is set for internal academics (existing or new)
+    // and remains null for external ones.
     escuela: selectedUnidadId.value,
     respuestas: respuestasProcesadas,
   };
 };
 
+// Function to submit the questionnaire
 const enviarCuestionario = async () => {
-  // Set the submitting state to true
   isSubmitting.value = true;
-  // Reset the submit error state to false
-  submitError.value = false;
+  submitError.value = false; // Reset error message before new attempt
 
   try {
-    // Generate the data to be sent in the POST request
-    const postData = generatePostData();
+    // If selectedUnidadId is null for an academic, prompt them to select
+    if (isAcademico.value === true && !selectedUnidadId.value) {
+      throw new Error(
+        "Por favor, seleccione su Unidad Académica antes de enviar el cuestionario."
+      );
+    }
 
-    // Log the data that will be sent before the POST request
+    const postData = generatePostData();
     console.log("Data to be sent:", postData);
 
-    // Perform the POST request to the backend
     const response = await fetch(
       "https://kth2025backend-production.up.railway.app/respuestas-cuestionarios",
       {
@@ -175,32 +296,32 @@ const enviarCuestionario = async () => {
       }
     );
 
-    // Check if the response was successful
     if (response.ok) {
-      // Set the submit success state to true
       submitSuccess.value = true;
-      // Clear the form data
+      // Reset relevant states after successful submission
       formData.value.respuestas = Array(
         preguntasCuestionario.value.length
       ).fill("");
-      // Reset the selected unit ID
-      selectedUnidadId.value = null;
-      // Hide the JSON data display
-      showJsonData.value = false;
+      selectedUnidadId.value = null; // Clear selected unit
+      greetUser.value = false; // Hide greeting
+      isAcademico.value = null; // Reset choice
+      email.value = ""; // Clear email
+      academicoEncontrado.value = null; // Clear academic info
+      showCuestionario.value = false; // Hide questionnaire after submission
+      // All other registration related fields should already be reset by resetToInitialState
     } else {
-      // Throw an error if the response was not successful
-      throw new Error("Error en el envío");
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error en el envío");
     }
   } catch (error) {
-    // Handle errors during the process
-    submitError.value = true;
+    submitError.value = error.message; // Set the actual error message
     console.error("Error al enviar el cuestionario:", error);
   } finally {
-    // Set the submitting state to false
     isSubmitting.value = false;
   }
 };
 
+// Helper to update specific response in formData
 const updateRespuesta = (index, value) => {
   formData.value.respuestas[index] = value;
 };
@@ -209,11 +330,8 @@ const updateRespuesta = (index, value) => {
 <template>
   <div class="welcome-container">
     <header>
-      <img
-        src="https://pucv.cl/uuaa/site/artic/20180620/imag/foto_0000000120180620105732.png"
-        alt="Logo Universidad"
-        class="logo"
-      />
+      <img src="https://pucv.cl/uuaa/site/artic/20180620/imag/foto_0000000120180620105732.png" alt="Logo Universidad"
+        class="logo" />
       <h1>Perfil de Proyecto Innovación Tecnológica</h1>
     </header>
 
@@ -229,15 +347,15 @@ const updateRespuesta = (index, value) => {
     </div>
 
     <div v-if="!isLoading && !loadError">
-      <div
-        v-if="
-          !showCuestionario &&
-          !isVerifyingEmail &&
-          !isExternalRegistration &&
-          !externalRegistrationSuccess
-        "
-        class="verification-form card"
-      >
+      <!-- Initial Verification Form (Choose Academic/External) -->
+      <div v-if="
+        !showCuestionario &&
+        !isVerifyingEmail &&
+        !isExternalRegistration &&
+        !isInternalAcademicRegistration &&
+        !submitSuccess &&
+        !externalRegistrationSuccess
+      " class="verification-form card">
         <h2>Verificación de Acceso</h2>
         <div class="form-group">
           <label class="radio-container">
@@ -255,160 +373,143 @@ const updateRespuesta = (index, value) => {
           </label>
         </div>
 
-        <div class="form-group" v-if="isAcademico">
-          <label for="unidadAcademica">Unidad Académica:</label>
-          <select
-            id="unidadAcademica"
-            v-model="selectedUnidadId"
-            class="select-input"
-          >
-            <option value="" disabled>Seleccione una unidad</option>
-            <option
-              v-for="unidad in unidadesAcademicas"
-              :key="unidad.id_unidad"
-              :value="unidad.id_unidad"
-            >
-              {{ unidad.nombre }}
-            </option>
-          </select>
-        </div>
-
-        <transition name="fade">
-          <div v-if="greetUser" class="success-message">
-            <div class="success-icon">👋</div>
-            <p v-if="academicoEncontrado">
-              ¡Hola, {{ academicoEncontrado.nombre }}
-              {{ academicoEncontrado.a_paterno }}! Bienvenid@ al cuestionario.
-            </p>
-            <p v-else-if="externalRegistrationSuccess">
-              ¡Hola, {{ externalName }} {{ externalAPaterno }}! Bienvenid@ al
-              cuestionario.
-            </p>
-          </div>
-        </transition>
-
-        <button
-          @click="verificarAcceso"
-          :disabled="
-            isAcademico === null ||
-            (isAcademico === true && !selectedUnidadId) ||
-            isSubmitting
-          "
-          class="verify-btn primary-btn"
-        >
-          <span v-if="!isSubmitting">Continuar al Cuestionario</span>
+        <button @click="verificarAcceso" :disabled="isAcademico === null || isSubmitting"
+          class="verify-btn primary-btn">
+          <span v-if="!isSubmitting">Continuar</span>
           <span v-else class="spinner-btn"></span>
         </button>
       </div>
 
+      <!-- Email Verification Form for Academics -->
       <transition name="fade">
         <div v-if="isVerifyingEmail" class="email-verification-form card">
-          <h3>Verificación de Email</h3>
+          <h3>Verificación de Email (Académico)</h3>
           <p>
-            Por favor, ingrese su correo electrónico para verificar su
-            identidad.
+            Por favor, ingrese su correo electrónico institucional para
+            verificar su identidad como académico.
           </p>
           <div class="form-group">
             <label for="email">Correo Electrónico:</label>
-            <input
-              type="email"
-              id="email"
-              v-model="email"
-              required
-              class="text-input"
-            />
+            <input type="email" id="email" v-model="email" required class="text-input" />
             <p v-if="emailVerificationError" class="error-message">
               {{ emailVerificationError }}
             </p>
           </div>
-          <button
-            @click="verificarEmail"
-            :disabled="isSubmitting"
-            class="verify-btn primary-btn"
-          >
+          <button @click="verificarEmail" :disabled="isSubmitting" class="verify-btn primary-btn">
             <span v-if="!isSubmitting">Verificar Email</span>
             <span v-else class="spinner-btn"></span>
+          </button>
+          <button @click="resetToInitialState()" class="secondary-btn back-btn">
+            Volver
           </button>
         </div>
       </transition>
 
+      <!-- Internal Academic Registration Form (if academic email not found) -->
       <transition name="fade">
-        <div v-if="isExternalRegistration" class="email-verification-form card">
-          <h3>Registro de Académico Externo</h3>
-          <p>Por favor, complete la siguiente información:</p>
+        <div v-if="isInternalAcademicRegistration" class="email-registration-form card">
+          <h3>Registro de Académico Interno</h3>
+          <p>
+            Su email no fue encontrado. Por favor, complete sus datos como
+            académico.
+          </p>
+          <div class="form-group">
+            <label for="internal-name">Nombre:</label>
+            <input type="text" id="internal-name" v-model="internalName" required class="text-input" />
+          </div>
+          <div class="form-group">
+            <label for="internal-apaterno">Apellido Paterno:</label>
+            <input type="text" id="internal-apaterno" v-model="internalAPaterno" required class="text-input" />
+          </div>
+          <div class="form-group">
+            <label for="internal-amaterno">Apellido Materno:</label>
+            <input type="text" id="internal-amaterno" v-model="internalAMaterno" class="text-input" />
+          </div>
+          <div class="form-group">
+            <label for="email-internal-reg">Correo Electrónico:</label>
+            <input type="email" id="email-internal-reg" v-model="email" required class="text-input" />
+          </div>
+          <div class="form-group">
+            <label for="unidadAcademicaReg">Unidad Académica:</label>
+            <select id="unidadAcademicaReg" v-model="selectedUnidadId" class="select-input" required>
+              <option value="" disabled>Seleccione su unidad</option>
+              <option v-for="unidad in unidadesAcademicas" :key="unidad.id_unidad" :value="unidad.id_unidad">
+                {{ unidad.nombre }}
+              </option>
+            </select>
+          </div>
+          <p v-if="internalRegistrationError" class="error-message">
+            {{ internalRegistrationError }}
+          </p>
+          <button @click="registrarAcademicoInterno" :disabled="isSubmitting" class="verify-btn primary-btn">
+            <span v-if="!isSubmitting">Registrar y Volver al Inicio</span>
+            <span v-else class="spinner-btn"></span>
+          </button>
+          <button @click="resetToInitialState()" class="secondary-btn back-btn">
+            Volver
+          </button>
+        </div>
+      </transition>
+
+      <!-- External Academic Registration Form -->
+      <transition name="fade">
+        <div v-if="isExternalRegistration" class="email-registration-form card">
+          <h3>Registro de Colaborador Externo</h3>
+          <p>
+            Por favor, complete la siguiente información para registrarse como
+            colaborador externo y acceder al cuestionario.
+          </p>
           <div class="form-group">
             <label for="external-name">Nombre:</label>
-            <input
-              type="text"
-              id="external-name"
-              v-model="externalName"
-              required
-              class="text-input"
-            />
+            <input type="text" id="external-name" v-model="externalName" required class="text-input" />
           </div>
           <div class="form-group">
             <label for="external-apaterno">Apellido Paterno:</label>
-            <input
-              type="text"
-              id="external-apaterno"
-              v-model="externalAPaterno"
-              required
-              class="text-input"
-            />
+            <input type="text" id="external-apaterno" v-model="externalAPaterno" required class="text-input" />
           </div>
           <div class="form-group">
             <label for="external-amaterno">Apellido Materno:</label>
-            <input
-              type="text"
-              id="external-amaterno"
-              v-model="externalAMaterno"
-              class="text-input"
-            />
+            <input type="text" id="external-amaterno" v-model="externalAMaterno" class="text-input" />
           </div>
           <div class="form-group">
-            <label for="email">Correo Electrónico:</label>
-            <input
-              type="email"
-              id="email"
-              v-model="email"
-              required
-              class="text-input"
-            />
+            <label for="email-external">Correo Electrónico:</label>
+            <input type="email" id="email-external" v-model="email" required class="text-input" />
             <p v-if="externalRegistrationError" class="error-message">
               {{ externalRegistrationError }}
             </p>
           </div>
-          <button
-            @click="registrarAcademicoExterno"
-            :disabled="isSubmitting"
-            class="verify-btn primary-btn"
-          >
-            <span v-if="!isSubmitting">Registrar</span>
+          <button @click="registrarAcademicoExterno" :disabled="isSubmitting" class="verify-btn primary-btn">
+            <span v-if="!isSubmitting">Registrar y Volver al Inicio</span>
             <span v-else class="spinner-btn"></span>
+          </button>
+          <button @click="resetToInitialState()" class="secondary-btn back-btn">
+            Volver
           </button>
         </div>
       </transition>
 
+      <!-- User Greeting (for both existing and newly registered) -->
       <transition name="fade">
-        <div v-if="externalRegistrationSuccess" class="success-message">
-          <div class="success-icon">✓</div>
-          <p>¡Registro exitoso! Gracias.</p>
+        <div v-if="greetUser" class="success-message initial-greeting">
+          <div class="success-icon">👋</div>
+          <p v-if="academicoEncontrado">
+            ¡Hola, {{ academicoEncontrado.nombre }}
+            {{ academicoEncontrado.a_paterno }}! Bienvenid@ al cuestionario.
+          </p>
         </div>
       </transition>
 
+      <!-- Questionnaire Section -->
       <div v-if="showCuestionario" class="cuestionario-container card">
         <div class="header-section">
           <h2>Cuestionario de Investigación</h2>
 
           <div class="info-badge">
-            <span>Unidad: {{ nombreEscuelaSeleccionada }}</span>
-            <span v-if="academicoEncontrado"
-              >Investigador: {{ academicoEncontrado.nombre }}
-              {{ academicoEncontrado.a_paterno }}</span
-            >
-            <span v-else-if="externalRegistrationSuccess"
-              >Investigador: {{ externalName }} {{ externalAPaterno }}</span
-            >
+            <!-- Show unit only if an internal academic is identified and has a unit -->
+            <span v-if="isAcademico === true && selectedUnidadId">Unidad: {{ nombreEscuelaSeleccionada }}</span>
+            <span v-if="academicoEncontrado">Investigador: {{ academicoEncontrado.nombre }}
+              {{ academicoEncontrado.a_paterno }}</span>
+            <span v-else-if="externalName">Colaborador: {{ externalName }} {{ externalAPaterno }}</span>
           </div>
         </div>
 
@@ -421,35 +522,39 @@ const updateRespuesta = (index, value) => {
 
         <div class="divider"></div>
 
-        <div
-          v-for="(pregunta, index) in preguntasCuestionario"
-          :key="pregunta.id_cuestionario"
-          class="pregunta-item"
-        >
+        <!-- Dynamic selection of Unidad Académica AFTER email verification if needed -->
+        <div class="form-group" v-if="
+          isAcademico === true && !selectedUnidadId && academicoEncontrado
+        ">
+          <label for="unidadAcademicaFinal">Por favor, seleccione su Unidad Académica:</label>
+          <select id="unidadAcademicaFinal" v-model="selectedUnidadId" class="select-input" required>
+            <option value="" disabled>Seleccione una unidad</option>
+            <option v-for="unidad in unidadesAcademicas" :key="unidad.id_unidad" :value="unidad.id_unidad">
+              {{ unidad.nombre }}
+            </option>
+          </select>
+          <p v-if="submitError && !selectedUnidadId" class="error-message">
+            Debe seleccionar una unidad académica.
+          </p>
+        </div>
+
+        <div v-for="(pregunta, index) in preguntasCuestionario" :key="pregunta.id_cuestionario" class="pregunta-item">
           <div class="pregunta-header">
             <span class="pregunta-number">Pregunta {{ index + 1 }}</span>
           </div>
           <p class="pregunta-text">{{ pregunta.pregunta }}</p>
-          <textarea
-            v-model="formData.respuestas[index]"
-            @input="updateRespuesta(index, $event.target.value)"
-            placeholder="Escriba su respuesta detallada aquí..."
-            rows="5"
-            class="textarea-input"
-          ></textarea>
+          <textarea v-model="formData.respuestas[index]" @input="updateRespuesta(index, $event.target.value)"
+            placeholder="Escriba su respuesta detallada aquí..." rows="5" class="textarea-input"></textarea>
         </div>
 
         <div class="actions-section">
-          <button
-            @click="enviarCuestionario"
-            :disabled="isSubmitting"
-            class="primary-btn submit-btn"
-          >
+          <button @click="enviarCuestionario" :disabled="isSubmitting" class="primary-btn submit-btn">
             <span v-if="!isSubmitting">Enviar Cuestionario</span>
             <span v-else class="spinner-btn"></span>
           </button>
         </div>
 
+        <!-- Submission Success/Error Messages for Questionnaire -->
         <transition name="fade">
           <div v-if="submitSuccess" class="success-message">
             <div class="success-icon">✓</div>
@@ -460,7 +565,7 @@ const updateRespuesta = (index, value) => {
 
         <div v-if="submitError" class="error-message">
           <div class="error-icon">⚠️</div>
-          <p>Error al enviar el cuestionario. Por favor intente nuevamente.</p>
+          <p>{{ submitError }}</p>
         </div>
       </div>
     </div>
@@ -468,6 +573,49 @@ const updateRespuesta = (index, value) => {
 </template>
 
 <style scoped>
+/* Add the initial-greeting class */
+.initial-greeting {
+  animation: fadeIn 0.5s ease-out;
+  margin-top: 20px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s;
+}
+
+.fade-enter,
+.fade-leave-to
+
+/* .fade-leave-active in <2.1.8 */
+  {
+  opacity: 0;
+}
+
+/* Ensure the spinner for buttons is visible */
+.spinner-btn {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  -webkit-animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+@-webkit-keyframes spin {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
 .radio-container {
   display: flex;
   align-items: center;
@@ -500,7 +648,7 @@ const updateRespuesta = (index, value) => {
   transition: opacity 0.2s;
 }
 
-.radio-container input[type="radio"]:checked + .radio-checkmark::after {
+.radio-container input[type="radio"]:checked+.radio-checkmark::after {
   opacity: 1;
 }
 
@@ -517,5 +665,15 @@ const updateRespuesta = (index, value) => {
 .info-badge span {
   font-size: 0.9rem;
   color: #555;
+}
+
+.back-btn {
+  margin-top: 15px;
+  background-color: #6c757d;
+  /* Gray color for secondary action */
+}
+
+.back-btn:hover {
+  background-color: #5a6268;
 }
 </style>
