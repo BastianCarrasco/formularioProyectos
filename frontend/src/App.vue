@@ -1,4 +1,5 @@
 <script setup>
+// ... (tu script setup actual, sin cambios aquí)
 import { ref, onMounted, computed } from "vue";
 import "../src/assets/estilos.css";
 
@@ -12,7 +13,7 @@ const isAcademico = ref(null); // true for academic, false for external
 const selectedUnidadId = ref(null); // Selected unit for academics
 const showCuestionario = ref(false);
 const isSubmitting = ref(false);
-const submitSuccess = ref(false);
+const submitSuccess = ref(false); // Used for brief questionnaire submission alert
 const submitError = ref(false);
 const isLoading = ref(false);
 const loadError = ref(null);
@@ -28,7 +29,7 @@ const internalAPaterno = ref("");
 const internalAMaterno = ref("");
 
 const isExternalRegistration = ref(false); // Controls external registration form
-const externalRegistrationSuccess = ref(false); // New: To show a brief success message after external registration
+const externalRegistrationSuccess = ref(false); // Used for brief alert after external registration
 const externalRegistrationError = ref(null);
 const externalName = ref("");
 const externalAPaterno = ref("");
@@ -44,6 +45,9 @@ const preguntasCuestionario = ref([]);
 const formData = ref({
   respuestas: [],
 });
+
+// New state for the final submission success message
+const showSubmissionSuccessMessage = ref(false);
 
 const nombreEscuelaSeleccionada = computed(() => {
   if (!selectedUnidadId.value) return "";
@@ -103,8 +107,9 @@ const resetToInitialState = () => {
   externalAMaterno.value = "";
   greetUser.value = false;
   academicoEncontrado.value = null;
-  submitSuccess.value = false; // Reset questionnaire submission success
-  submitError.value = false; // Reset questionnaire submission error
+  submitSuccess.value = false; // Reset questionnaire submission success (internal alert)
+  submitError.value = false; // Reset questionnaire submission error (internal alert)
+  showSubmissionSuccessMessage.value = false; // Ensure final success message is hidden
 };
 
 // Function to determine the next step based on user's choice (academic or not)
@@ -297,18 +302,13 @@ const enviarCuestionario = async () => {
     );
 
     if (response.ok) {
-      submitSuccess.value = true;
-      // Reset relevant states after successful submission
-      formData.value.respuestas = Array(
-        preguntasCuestionario.value.length
-      ).fill("");
-      selectedUnidadId.value = null; // Clear selected unit
-      greetUser.value = false; // Hide greeting
-      isAcademico.value = null; // Reset choice
-      email.value = ""; // Clear email
-      academicoEncontrado.value = null; // Clear academic info
-      showCuestionario.value = false; // Hide questionnaire after submission
-      // All other registration related fields should already be reset by resetToInitialState
+      submitSuccess.value = true; // Still use this for brief internal message
+      showSubmissionSuccessMessage.value = true; // NEW: Show final success message
+      showCuestionario.value = false; // Hide questionnaire
+      // Optionally clear form data or reset to initial state if desired after final message
+      // For now, only hiding questionnaire and showing success message.
+      // If you want to reset everything back to initial choice after this message,
+      // you'd call resetToInitialState() here after a short delay for user to read.
     } else {
       const errorData = await response.json();
       throw new Error(errorData.message || "Error en el envío");
@@ -354,7 +354,8 @@ const updateRespuesta = (index, value) => {
         !isExternalRegistration &&
         !isInternalAcademicRegistration &&
         !submitSuccess &&
-        !externalRegistrationSuccess
+        !externalRegistrationSuccess &&
+        !showSubmissionSuccessMessage
       " class="verification-form card">
         <h2>Verificación de Acceso</h2>
         <div class="form-group">
@@ -373,11 +374,15 @@ const updateRespuesta = (index, value) => {
           </label>
         </div>
 
-        <button @click="verificarAcceso" :disabled="isAcademico === null || isSubmitting"
-          class="verify-btn primary-btn">
-          <span v-if="!isSubmitting">Continuar</span>
-          <span v-else class="spinner-btn"></span>
-        </button>
+        <!-- Botón "Continuar" para el formulario inicial -->
+        <div class="form-actions-center">
+          <!-- Clase para centrar el botón si solo hay uno -->
+          <button @click="verificarAcceso" :disabled="isAcademico === null || isSubmitting"
+            class="verify-btn primary-btn">
+            <span v-if="!isSubmitting">Continuar</span>
+            <span v-else class="spinner-btn"></span>
+          </button>
+        </div>
       </div>
 
       <!-- Email Verification Form for Academics -->
@@ -395,13 +400,16 @@ const updateRespuesta = (index, value) => {
               {{ emailVerificationError }}
             </p>
           </div>
-          <button @click="verificarEmail" :disabled="isSubmitting" class="verify-btn primary-btn">
-            <span v-if="!isSubmitting">Verificar Email</span>
-            <span v-else class="spinner-btn"></span>
-          </button>
-          <button @click="resetToInitialState()" class="secondary-btn back-btn">
-            Volver
-          </button>
+          <!-- Nuevo contenedor para los botones -->
+          <div class="form-actions">
+            <button @click="resetToInitialState()" class="secondary-btn back-btn">
+              Volver
+            </button>
+            <button @click="verificarEmail" :disabled="isSubmitting" class="verify-btn primary-btn">
+              <span v-if="!isSubmitting">Verificar Email</span>
+              <span v-else class="spinner-btn"></span>
+            </button>
+          </div>
         </div>
       </transition>
 
@@ -410,8 +418,7 @@ const updateRespuesta = (index, value) => {
         <div v-if="isInternalAcademicRegistration" class="email-registration-form card">
           <h3>Registro de Académico Interno</h3>
           <p>
-            Su email no fue encontrado. Por favor, complete sus datos como
-            académico.
+            Su email no fue encontrado. Por favor, complete sus datos como académico.
           </p>
           <div class="form-group">
             <label for="internal-name">Nombre:</label>
@@ -441,13 +448,16 @@ const updateRespuesta = (index, value) => {
           <p v-if="internalRegistrationError" class="error-message">
             {{ internalRegistrationError }}
           </p>
-          <button @click="registrarAcademicoInterno" :disabled="isSubmitting" class="verify-btn primary-btn">
-            <span v-if="!isSubmitting">Registrar y Volver al Inicio</span>
-            <span v-else class="spinner-btn"></span>
-          </button>
-          <button @click="resetToInitialState()" class="secondary-btn back-btn">
-            Volver
-          </button>
+          <!-- Nuevo contenedor para los botones -->
+          <div class="form-actions">
+            <button @click="resetToInitialState()" class="secondary-btn back-btn">
+              Volver
+            </button>
+            <button @click="registrarAcademicoInterno" :disabled="isSubmitting" class="verify-btn primary-btn">
+              <span v-if="!isSubmitting">Registrar y Volver al Inicio</span>
+              <span v-else class="spinner-btn"></span>
+            </button>
+          </div>
         </div>
       </transition>
 
@@ -478,13 +488,16 @@ const updateRespuesta = (index, value) => {
               {{ externalRegistrationError }}
             </p>
           </div>
-          <button @click="registrarAcademicoExterno" :disabled="isSubmitting" class="verify-btn primary-btn">
-            <span v-if="!isSubmitting">Registrar y Volver al Inicio</span>
-            <span v-else class="spinner-btn"></span>
-          </button>
-          <button @click="resetToInitialState()" class="secondary-btn back-btn">
-            Volver
-          </button>
+          <!-- Nuevo contenedor para los botones -->
+          <div class="form-actions">
+            <button @click="resetToInitialState()" class="secondary-btn back-btn">
+              Volver
+            </button>
+            <button @click="registrarAcademicoExterno" :disabled="isSubmitting" class="verify-btn primary-btn">
+              <span v-if="!isSubmitting">Registrar y Volver al Inicio</span>
+              <span v-else class="spinner-btn"></span>
+            </button>
+          </div>
         </div>
       </transition>
 
@@ -554,20 +567,25 @@ const updateRespuesta = (index, value) => {
           </button>
         </div>
 
-        <!-- Submission Success/Error Messages for Questionnaire -->
-        <transition name="fade">
-          <div v-if="submitSuccess" class="success-message">
-            <div class="success-icon">✓</div>
-            <p>¡Cuestionario enviado con éxito!</p>
-            <p>Gracias por tu participación.</p>
-          </div>
-        </transition>
-
+        <!-- Submission Error Message for Questionnaire (within questionnaire view) -->
         <div v-if="submitError" class="error-message">
           <div class="error-icon">⚠️</div>
           <p>{{ submitError }}</p>
         </div>
       </div>
+
+      <!-- Final Questionnaire Submission Success Message (replaces the questionnaire) -->
+      <transition name="fade">
+        <div v-if="showSubmissionSuccessMessage" class="final-success-message card">
+          <div class="success-icon big-icon">✓</div>
+          <h2>¡Respuestas Enviadas con Éxito!</h2>
+          <p>Nuestros evaluadores estudiarán su proyecto próximamente.</p>
+          <p>¡Gracias por contribuir!</p>
+          <button @click="resetToInitialState()" class="primary-btn reset-app-btn">
+            Volver al Inicio
+          </button>
+        </div>
+      </transition>
     </div>
   </div>
 </template>
@@ -675,5 +693,88 @@ const updateRespuesta = (index, value) => {
 
 .back-btn:hover {
   background-color: #5a6268;
+}
+
+/* New styles for the final success message */
+.final-success-message {
+  text-align: center;
+  padding: 40px 20px;
+  margin-top: 50px;
+  background-color: #e6ffe6;
+  /* Light green background */
+  border: 1px solid #a3e6a3;
+  /* Green border */
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.8s ease-out;
+}
+
+.final-success-message .big-icon {
+  font-size: 60px;
+  color: #28a745;
+  /* Green checkmark */
+  margin-bottom: 20px;
+}
+
+.final-success-message h2 {
+  color: #28a745;
+  margin-bottom: 15px;
+}
+
+.final-success-message p {
+  font-size: 1.1rem;
+  color: #333;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.final-success-message .reset-app-btn {
+  margin-top: 30px;
+  padding: 12px 25px;
+  font-size: 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.final-success-message .reset-app-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Estilo para agrupar y separar los botones en los formularios de registro */
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  /* Esto empuja un botón a cada extremo */
+  align-items: center;
+  /* Opcional: alinea verticalmente si los botones tienen diferente altura */
+  margin-top: 20px;
+  /* Espacio superior para separarlo de los campos */
+}
+
+/* Puedes ajustar el padding del botón volver si lo necesitas */
+.back-btn {
+  /* Si ya tienes estilos específicos para .back-btn, mantenlos aquí. */
+  /* Por ejemplo, para que tenga el mismo padding que el primary-btn si no lo tiene. */
+  padding: 0.8rem 1.8rem;
+}
+
+/* Asegúrate de que el botón de verificar email también tenga el botón "Volver" con flexbox */
+.email-verification-form .form-group+button {
+  /* Este selector actualmente aplica al primer botón después de form-group */
+  /* Si quieres el mismo comportamiento para 'Verificar Email' y 'Volver', */
+  /* también necesitarías envolverlos en un div.form-actions. */
+  /* Para tu caso actual: */
+  margin-right: 10px;
+  /* Agrega un pequeño margen entre "Verificar Email" y "Volver" */
+}
+
+/* Modificación para el formulario de verificación de email también */
+.email-verification-form {
+  /* Asegura que el formulario completo maneje el espacio si los botones no están en .form-actions */
+  /* O, mejor aún, aplica .form-actions aquí también para consistencia */
 }
 </style>
