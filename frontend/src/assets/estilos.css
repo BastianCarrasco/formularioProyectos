@@ -378,6 +378,168 @@ input[type="password"]:focus {
   opacity: 0;
 }
 
+/* Keep your existing styles here or in a global CSS file */
+/* The styles that are common for all components or general layout */
+.initial-greeting {
+  animation: fadeIn 0.5s ease-out;
+  margin-top: 20px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s;
+}
+
+.fade-enter,
+.fade-leave-to
+
+/* .fade-leave-active in <2.1.8 */ {
+  opacity: 0;
+}
+
+.spinner-btn {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  -webkit-animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+@-webkit-keyframes spin {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+.radio-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.radio-container input[type="radio"] {
+  display: none;
+}
+
+.radio-checkmark {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ccc;
+  border-radius: 50%;
+  margin-right: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.radio-checkmark::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background-color: #007bff;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.radio-container input[type="radio"]:checked + .radio-checkmark::after {
+  opacity: 1;
+}
+
+.info-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 5px;
+}
+
+.info-badge span {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.back-btn {
+  margin-top: 15px;
+  background-color: #6c757d;
+}
+
+.back-btn:hover {
+  background-color: #5a6268;
+}
+
+.final-success-message {
+  text-align: center;
+  padding: 40px 20px;
+  margin-top: 50px;
+  background-color: #e6ffe6;
+  border: 1px solid #a3e6a3;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.8s ease-out;
+}
+
+.final-success-message .big-icon {
+  font-size: 60px;
+  color: #28a745;
+  margin-bottom: 20px;
+}
+
+.final-success-message h2 {
+  color: #28a745;
+  margin-bottom: 15px;
+}
+
+.final-success-message p {
+  font-size: 1.1rem;
+  color: #333;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.final-success-message .reset-app-btn {
+  margin-top: 30px;
+  padding: 12px 25px;
+  font-size: 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.final-success-message .reset-app-btn:hover {
+  background-color: #0056b3;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.back-btn {
+  padding: 0.8rem 1.8rem;
+}
+
+.email-verification-form .form-group + button {
+  margin-right: 10px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .welcome-container {
