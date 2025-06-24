@@ -1,5 +1,5 @@
 // composables/useCuestionario.js
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted } from "vue";
 
 export function useCuestionario() {
   const urlcuestionario = import.meta.env.VITE_API_URL_CUESTIONARIOS;
@@ -26,13 +26,17 @@ export function useCuestionario() {
   });
 
   const nombreInvestigadorSeleccionado = computed(() => {
-    const found = academicos.value.find(a => a.id_academico === formData.value.id_investigador);
-    return found ? found.nombre : '';
+    const found = academicos.value.find(
+      (a) => a.id_academico === formData.value.id_investigador
+    );
+    return found ? found.nombre : "";
   });
 
   const nombreEscuelaSeleccionada = computed(() => {
-    const found = unidadesAcademicas.value.find(u => u.id_unidad === selectedUnidadId.value);
-    return found ? found.nombre : '';
+    const found = unidadesAcademicas.value.find(
+      (u) => u.id_unidad === selectedUnidadId.value
+    );
+    return found ? found.nombre : "";
   });
 
   onMounted(async () => {
@@ -48,11 +52,14 @@ export function useCuestionario() {
       if (acResponse.success) academicos.value = acResponse.data;
       if (cuResponse.success) {
         preguntasCuestionario.value = cuResponse.data;
-        formData.value.respuestas = Array(preguntasCuestionario.value.length).fill('');
+        formData.value.respuestas = Array(
+          preguntasCuestionario.value.length
+        ).fill("");
       }
     } catch (error) {
       console.error("Error al cargar datos:", error);
-      loadError.value = "Error al cargar los datos. Por favor intente más tarde.";
+      loadError.value =
+        "Error al cargar los datos. Por favor intente más tarde.";
     } finally {
       isLoading.value = false;
     }
@@ -76,11 +83,14 @@ export function useCuestionario() {
 
     try {
       const postData = generatePostData();
-      const response = await fetch("https://kth2025backend-production.up.railway.app/respuestas-cuestionarios", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData),
-      });
+      const response = await fetch(
+        "https://elysia-bunbackend-production.up.railway.app/respuestas-cuestionario",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(postData),
+        }
+      );
 
       if (!response.ok) throw new Error("Error en el envío");
 
@@ -105,14 +115,28 @@ export function useCuestionario() {
 
   return {
     // states
-    isAcademico, selectedUnidadId, showCuestionario, isSubmitting, submitSuccess, submitError,
-    isLoading, loadError, showJsonData, unidadesAcademicas, academicos, preguntasCuestionario,
+    isAcademico,
+    selectedUnidadId,
+    showCuestionario,
+    isSubmitting,
+    submitSuccess,
+    submitError,
+    isLoading,
+    loadError,
+    showJsonData,
+    unidadesAcademicas,
+    academicos,
+    preguntasCuestionario,
     formData,
 
     // computed
-    nombreInvestigadorSeleccionado, nombreEscuelaSeleccionada,
+    nombreInvestigadorSeleccionado,
+    nombreEscuelaSeleccionada,
 
     // methods
-    verificarAcceso, generatePostData, enviarCuestionario, updateRespuesta,
+    verificarAcceso,
+    generatePostData,
+    enviarCuestionario,
+    updateRespuesta,
   };
 }
