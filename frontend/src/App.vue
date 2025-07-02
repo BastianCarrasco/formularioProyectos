@@ -255,13 +255,17 @@ const handleRegisterExternalCollaborator = async (regData) => {
 
     if (response.ok) {
       academicoEncontrado.value = await response.json();
-      await cargarDatos(); // Recargar datos para que la nueva unidad esté en la lista
+      // ******* CAMBIO CLAVE AQUÍ *******
+      // En lugar de cargarDatos(), añadir el nuevo académico a la lista existente
+      // Esto asume que `academicos.value` es un array que contiene todos los académicos
+      academicos.value.push(academicoEncontrado.value);
+
       alert(
         "¡Registro como colaborador externo exitoso! Ahora puede continuar y acceder al cuestionario."
       );
       currentStep.value = "questionnaire";
       showCuestionario.value = true;
-      isAcademico.value = false;
+      isAcademico.value = false; // Confirmar que es un colaborador externo
       selectedUnidadId.value = null; // Reset project unit for new questionnaire
     } else {
       const errorData = await response.json();
@@ -279,6 +283,8 @@ const handleRegisterExternalCollaborator = async (regData) => {
 };
 
 // NUEVA FUNCIÓN: Maneja la adición de una nueva unidad académica
+// ... (código existente)
+
 const handleAddNewUnidad = async (nombreNuevaUnidad) => {
   isAddingNewUnidad.value = true;
   externalRegistrationError.value = null; // Limpiar errores previos
@@ -286,20 +292,32 @@ const handleAddNewUnidad = async (nombreNuevaUnidad) => {
     const response = await fetch(urlUA, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nombre: nombreNuevaUnidad }), // <--- AQUÍ ESTÁ LA CLAVE
+      body: JSON.stringify({ nombre: nombreNuevaUnidad }),
     });
 
     if (response.ok) {
       const nuevaUnidad = await response.json();
-      await cargarDatos(); // Recargar todas las unidades para asegurar que la lista esté actualizada
+      // ******* CAMBIO CLAVE AQUÍ *******
+      // Añadir la nueva unidad directamente al array reactivo
+      unidadesAcademicas.value.push(nuevaUnidad);
 
-      // Aquí podrías querer actualizar directamente la unidad seleccionada en el estado local de App.vue
-      // si es relevante, o si el componente ExternalCollaboratorRegistrationForm lo necesita.
-      // Por ejemplo: selectedUnidadId.value = nuevaUnidad.id_unidad;
-      alert(`Unidad "${nuevaUnidad.nombre}" añadida exitosamente y seleccionada.`);
+      // También puedes ordenar la lista si quieres que aparezca en un orden específico
+      // unidadesAcademicas.value.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+      // Si necesitas seleccionar la unidad recién añadida en el formulario hijo,
+      // podrías emitir un evento de vuelta al hijo o asignarla aquí si el control
+      // lo permite (ej. si `selectedUnidadId` controla el campo en el hijo).
+      // Por ejemplo, si el id de la nueva unidad es necesario para la selección:
+      // Si el campo de selección de unidad en ExternalCollaboratorRegistrationForm
+      // está enlazado con v-model a `externalRegData.id_unidad`, podrías hacer:
+      // externalRegData.value.id_unidad = nuevaUnidad.id_unidad; // Asegúrate de que el id sea correcto
+
+      alert(
+        `Unidad "${nuevaUnidad.nombre}" añadida exitosamente y seleccionada.`
+      );
     } else {
       const errorData = await response.json();
-      throw new Error( // Corregido: 'new new Error' a 'new Error'
+      throw new Error(
         errorData.message || "Error al añadir la nueva unidad académica"
       );
     }
@@ -386,7 +404,7 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
     <header class="app-header">
       <!-- Moved header content into a new container for max-width centering -->
       <div class="header-inner-content">
-        <img src="../src/assets/Escudo-PUCV.svg" alt="Logo Universidad" class="logo" />
+        <img src="../src/assets/logo-fin.png" alt="Logo Universidad" class="logo" />
         <div class="header-text">
           <h1>Perfil de Proyecto Innovación Tecnológica</h1>
 
@@ -459,13 +477,23 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
     </main>
 
     <footer class="app-footer">
-      <!-- Footer content also moved into a new container for max-width centering -->
       <div class="footer-inner-content">
-        <p>&copy; {{ new Date().getFullYear() }} Pontificia Universidad Católica de Valparaíso</p>
-        <p>Dirección: Av. Brasil 2950, Valparaíso, Chile</p>
-        <p>Contacto: <a href="mailto:innovacion@pucv.cl">innovacion@pucv.cl</a></p>
+        <!-- Contenedor para los logos -->
+        <div class="footer-logos">
+
+          <img src="../src/assets/Escudo-PUCV.svg" alt="Logo PUCV" class="footer-logo" />
+          <img src="../src/assets/AC.svg" alt="Logo AC" class="footer-logo" />
+          <img src="../src/assets/CNA.svg" alt="Logo CNA" class="footer-logo" />
+          <img src="../src/assets/LOGO_G9.svg" alt="Logo G9" class="footer-logo" />
+        </div>
+
+        <!-- Contenedor para la información de texto -->
+        <div class="footer-text-info">
+          <p>&copy; {{ new Date().getFullYear() }} Pontificia Universidad Católica de Valparaíso</p>
+          <p>Dirección: Av. Brasil 2950, Valparaíso, Chile</p>
+          <p>Contacto: <a href="mailto:decanato.ingenieria@pucv.cl">decanato.ingenieria@pucv.cl</a></p>
+        </div>
       </div>
-      <!-- Optional: <div class="footer-links">...</div> could also be inside footer-inner-content -->
     </footer>
   </div>
 </template>
@@ -642,7 +670,8 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
 .app-footer {
   background-color: #2E5C8A;
   color: white;
-  padding: 0.8rem 0;
+  padding: 1.5rem 0;
+  /* Aumentar un poco el padding vertical para más espacio */
   text-align: center;
   border-top: 1px solid #e0e0e0;
   font-size: 0.9rem;
@@ -651,86 +680,126 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
 }
 
 .footer-inner-content {
-  max-width: 900px;
+  max-width: 1200px;
+  /* Un poco más ancho para los logos */
   margin: 0 auto;
   padding: 0 2rem;
   display: flex;
+  flex-direction: column;
+  /* Apila logos y texto verticalmente por defecto */
+  align-items: center;
+  /* Centra los bloques de contenido */
+  gap: 1.5rem;
+  /* Espacio entre el bloque de logos y el de texto */
+}
+
+.footer-logos {
+  display: flex;
   justify-content: center;
+  /* Centra los logos horizontalmente */
   align-items: center;
   flex-wrap: wrap;
+  /* Permite que los logos se envuelvan en pantallas pequeñas */
   gap: 1rem;
+  /* Espacio entre cada logo */
+  margin-bottom: 1rem;
+  /* Espacio entre los logos y el texto */
 }
 
-.footer-inner-content p {
+.footer-logo {
+  /* Nueva clase para los logos del footer */
+  height: 50px;
+  /* Ajusta la altura de los logos para que no sean demasiado grandes */
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+  /* Evita que los logos se encojan demasiado */
+}
+
+.footer-text-info {
+  /* Nueva clase para la información de texto */
+  display: flex;
+  flex-wrap: wrap;
+  /* Permite que el texto se envuelva */
+  justify-content: center;
+  gap: 0.8rem 1.5rem;
+  /* Espacio vertical y horizontal entre los elementos de texto */
+  text-align: center;
+  /* Centra el texto */
+}
+
+.footer-text-info p {
+  /* Estilo específico para los párrafos dentro de footer-text-info */
   margin: 0;
   color: white;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
 }
 
-.footer-inner-content p:not(:last-child)::after {
-  content: " | ";
-  white-space: pre;
-}
-
-
-.footer-inner-content a {
+.footer-text-info a {
+  /* Estilo específico para los enlaces dentro de footer-text-info */
   color: #c9e1f5;
   text-decoration: none;
 }
 
-.footer-inner-content a:hover {
+.footer-text-info a:hover {
   text-decoration: underline;
 }
+
 
 /* Adjustments for responsiveness */
 @media (max-width: 768px) {
 
-  .header-inner-content,
-  .footer-inner-content {
+  .header-inner-content {
+    /* Header */
     padding: 0 1rem;
     gap: 0.5rem;
-    /* Ajustado para que el gap no sea demasiado grande en móvil */
-  }
-
-  .main-content-wrapper {
-    padding: 1.5rem 0;
-    /* Menos padding vertical en móvil */
-  }
-
-  .header-inner-content {
     flex-direction: column;
     text-align: center;
   }
 
   .app-header .logo {
+    /* Header logo */
     height: 70px;
-    /* Ajustado el tamaño del logo para móvil */
   }
 
   .header-text h1 {
+    /* Header title */
     font-size: 1.6rem;
-    /* Ajustado el tamaño del título para móvil */
   }
 
   .header-text .subtitle {
+    /* Header subtitle */
     font-size: 0.9rem;
   }
 
+  .main-content-wrapper {
+    /* Main content */
+    padding: 1.5rem 0;
+  }
+
   .footer-inner-content {
+    /* Footer */
+    padding: 0 1rem;
+    gap: 1rem;
+    /* Ajustado el gap principal para móviles */
+  }
+
+  .footer-logos {
+    /* Footer logos container */
+    gap: 0.8rem;
+    /* Ajustado el gap entre logos */
+  }
+
+  .footer-logo {
+    /* Footer logo images */
+    height: 40px;
+  }
+
+  .footer-text-info {
+    /* Footer text info container */
     flex-direction: column;
-    gap: 0.3rem;
-  }
-
-  .footer-inner-content p {
-    white-space: normal;
-    text-overflow: unset;
-  }
-
-  .footer-inner-content p:not(:last-child)::after {
-    content: "";
+    /* Apila el texto en columnas */
+    gap: 0.5rem;
+    /* Ajustado el gap entre líneas de texto */
   }
 }
 
@@ -755,6 +824,15 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
 
   .footer-inner-content {
     padding: 0 0.8rem;
+  }
+
+  .footer-logo {
+    height: 35px;
+  }
+
+  .footer-text-info p,
+  .footer-text-info a {
+    font-size: 0.8rem;
   }
 }
 </style>
