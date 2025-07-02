@@ -46,6 +46,7 @@ const externalRegData = ref({
   name: "",
   aPaterno: "",
   aMaterno: "",
+  email: "",
 });
 const externalRegistrationError = ref(null);
 
@@ -86,6 +87,7 @@ async function cargarDatos() {
     unidadesAcademicas.value = uaResponse;
     academicos.value = acResponse;
     preguntasCuestionario.value = cuResponse;
+    // Asegurarse de que formData.respuestas se inicialice como un array en App.vue
     formData.value.respuestas = Array(
       preguntasCuestionario.value.length
     ).fill("");
@@ -161,10 +163,10 @@ const handleVerifyEmail = (enteredEmail) => {
     showCuestionario.value = true;
     currentStep.value = "questionnaire";
   } else {
+    // CAMBIO CLAVE AQUÍ: No cambiar de paso, solo mostrar el error
     internalRegistrationError.value =
-      "Correo electrónico no encontrado en el cuerpo académico. Por favor, regístrese como académico interno.";
-    currentStep.value = "internal-registration";
-    internalRegData.value.email = email.value; // Pre-fill internal form
+      "El correo electrónico ingresado no se encuentra registrado en nuestra base de datos académica. Por favor, vuelva al inicio para registrarse como colaborador externo.";
+    currentStep.value = "verify-email"; // Mantener en el mismo paso
   }
 };
 
@@ -223,6 +225,12 @@ const handleRegisterInternalAcademic = async (regData) => {
 
 const handleRegisterExternalCollaborator = async (regData) => {
   externalRegistrationError.value = null;
+  // Handle validation error passed from child
+  if (regData.validationError) {
+    externalRegistrationError.value = regData.validationError;
+    return;
+  }
+
   if (!regData.email || !regData.name || !regData.aPaterno) {
     externalRegistrationError.value =
       "Por favor, complete todos los campos obligatorios (Nombre, Apellido Paterno, Email).";
@@ -271,7 +279,6 @@ const handleRegisterExternalCollaborator = async (regData) => {
 };
 
 // NUEVA FUNCIÓN: Maneja la adición de una nueva unidad académica
-// NUEVA FUNCIÓN: Maneja la adición de una nueva unidad académica
 const handleAddNewUnidad = async (nombreNuevaUnidad) => {
   isAddingNewUnidad.value = true;
   externalRegistrationError.value = null; // Limpiar errores previos
@@ -286,10 +293,13 @@ const handleAddNewUnidad = async (nombreNuevaUnidad) => {
       const nuevaUnidad = await response.json();
       await cargarDatos(); // Recargar todas las unidades para asegurar que la lista esté actualizada
 
-      alert(`Unidad "${nuevaUnidad.nombre}" añadida exitosamente.`);
+      // Aquí podrías querer actualizar directamente la unidad seleccionada en el estado local de App.vue
+      // si es relevante, o si el componente ExternalCollaboratorRegistrationForm lo necesita.
+      // Por ejemplo: selectedUnidadId.value = nuevaUnidad.id_unidad;
+      alert(`Unidad "${nuevaUnidad.nombre}" añadida exitosamente y seleccionada.`);
     } else {
       const errorData = await response.json();
-      throw new Error(
+      throw new Error( // Corregido: 'new new Error' a 'new Error'
         errorData.message || "Error al añadir la nueva unidad académica"
       );
     }
@@ -305,17 +315,22 @@ const handleAddNewUnidad = async (nombreNuevaUnidad) => {
 // Generates the data payload for the questionnaire submission
 const generatePostData = () => {
   const postData = {
+    // Aquí es importante usar el ID del académico/colaborador encontrado/registrado
     nombre_investigador: academicoEncontrado.value
-      ? academicoEncontrado.value.id_academico
-      : null,
-    escuela: selectedUnidadId.value,
+      ? academicoEncontrado.value.id_academico // Si es académico, usa su ID
+      : null, // Si es null, el backend deberá manejarlo como un colaborador sin ID directo o un error
+    escuela: selectedUnidadId.value, // El ID de la unidad académica seleccionada
   };
 
+  // Rellenar las respuestas dinámicamente
   formData.value.respuestas.forEach((respuesta, index) => {
+    // Asegurarse de que las respuestas sean strings, incluso si están vacías
     postData[`respuesta_${index + 1}`] =
-      respuesta === null || respuesta === undefined ? "" : respuesta;
+      respuesta === null || respuesta === undefined ? "" : String(respuesta);
   });
 
+  // Asegurarse de que todas las 9 respuestas existan en el payload, aunque estén vacías
+  // Esto es para cumplir con la estructura del backend si siempre espera 9 respuestas
   for (let i = 1; i <= 9; i++) {
     if (!postData[`respuesta_${i}`]) {
       postData[`respuesta_${i}`] = "";
@@ -339,9 +354,9 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
 
   try {
     const postData = generatePostData();
-    console.log("Data to be sent:", postData);
+    console.log("Data to be sent:", JSON.stringify(postData)); // Para depuración, ver el JSON
 
-    const response = await fetch(urlRespuestas, {
+    const response = await fetch(urlRespuestas, { // urlRespuestas ya debería ser la URL correcta
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(postData),
@@ -366,74 +381,380 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
   }
 };
 </script>
-
 <template>
   <div class="welcome-container">
-    <header>
-      <img src="https://pucv.cl/uuaa/site/artic/20180620/imag/foto_0000000120180620105732.png" alt="Logo Universidad"
-        class="logo" />
-      <h1>Perfil de Proyecto Innovación Tecnológica</h1>
+    <header class="app-header">
+      <!-- Moved header content into a new container for max-width centering -->
+      <div class="header-inner-content">
+        <img src="../src/assets/Escudo-PUCV.svg" alt="Logo Universidad" class="logo" />
+        <div class="header-text">
+          <h1>Perfil de Proyecto Innovación Tecnológica</h1>
+
+        </div>
+      </div>
+      <!-- Optional: <nav class="main-nav">...</nav> could also be inside header-inner-content -->
     </header>
 
-    <div v-if="isLoading" class="loading">
-      <div class="spinner"></div>
-      <p>Cargando datos del cuestionario...</p>
-    </div>
+    <!-- Main content area wrapper for consistent containment -->
+    <main class="main-content-wrapper">
+      <div v-if="isLoading" class="loading">
+        <div class="spinner"></div>
+        <p>Cargando datos del cuestionario...</p>
+      </div>
 
-    <div v-if="loadError" class="error">
-      <div class="error-icon">⚠️</div>
-      <p>{{ loadError }}</p>
-      <button @click="cargarDatos" class="retry-btn">Reintentar</button>
-    </div>
+      <div v-if="loadError" class="error">
+        <div class="error-icon">⚠️</div>
+        <p>{{ loadError }}</p>
+        <button @click="cargarDatos" class="retry-btn">Reintentar</button>
+      </div>
 
-    <div v-if="!isLoading && !loadError">
-      <!-- Step 1: Initial Access Choice -->
-      <InitialAccessForm v-if="currentStep === 'initial'" @continue-access="handleContinueAccess" />
+      <div v-if="!isLoading && !loadError">
+        <!-- Step 1: Initial Access Choice -->
+        <InitialAccessForm v-if="currentStep === 'initial'" @continue-access="handleContinueAccess" />
 
-      <!-- Step 2: Email Verification for Academics -->
-      <EmailVerificationForm v-if="currentStep === 'verify-email'" :initial-email="email"
-        :error-message="internalRegistrationError" :is-submitting="isSubmitting" @verify-email="handleVerifyEmail"
-        @back="resetToInitialState" />
+        <!-- Step 2: Email Verification for Academics -->
+        <EmailVerificationForm v-if="currentStep === 'verify-email'" :initial-email="email"
+          :error-message="internalRegistrationError" :is-submitting="isSubmitting" @verify-email="handleVerifyEmail"
+          @back="resetToInitialState" />
 
-      <!-- Step 3a: Internal Academic Registration (if email not found) -->
-      <InternalAcademicRegistrationForm v-if="currentStep === 'internal-registration'" :initial-email="email"
-        :unidades-academicas="unidadesAcademicas" :error-message="internalRegistrationError"
-        :is-submitting="isSubmitting" @register-internal="handleRegisterInternalAcademic" @back="resetToInitialState" />
+        <!-- Step 3a: Internal Academic Registration (if email not found) -->
+        <InternalAcademicRegistrationForm v-if="currentStep === 'internal-registration'" :initial-email="email"
+          :unidades-academicas="unidadesAcademicas" :error-message="internalRegistrationError"
+          :is-submitting="isSubmitting" @register-internal="handleRegisterInternalAcademic"
+          @back="resetToInitialState" />
 
-      <!-- Step 3b: External Collaborator Registration -->
-      <ExternalCollaboratorRegistrationForm v-if="currentStep === 'external-registration'" :initial-email="email"
-        :error-message="externalRegistrationError" :is-submitting="isSubmitting"
-        :unidades-academicas="unidadesAcademicas" :is-adding-new-unidad="isAddingNewUnidad"
-        @register-external="handleRegisterExternalCollaborator" @back="resetToInitialState"
-        @add-new-unidad="handleAddNewUnidad" />
-      <!-- ^^^ NUEVA PROP Y NUEVO EMIT HANDLER AÑADIDOS AQUÍ ^^^ -->
+        <!-- Step 3b: External Collaborator Registration -->
+        <ExternalCollaboratorRegistrationForm v-if="currentStep === 'external-registration'" :initial-email="email"
+          :error-message="externalRegistrationError" :is-submitting="isSubmitting"
+          :unidades-academicas="unidadesAcademicas" :is-adding-new-unidad="isAddingNewUnidad"
+          @register-external="handleRegisterExternalCollaborator" @back="resetToInitialState"
+          @add-new-unidad="handleAddNewUnidad" />
 
-      <!-- User Greeting (shown before questionnaire if relevant) -->
-      <transition name="fade">
-        <div v-if="currentStep === 'questionnaire' && academicoEncontrado" class="success-message initial-greeting">
-          <div class="success-icon">👋</div>
-          <p>
-            ¡Hola, {{ academicoEncontrado.nombre }}
-            {{ academicoEncontrado.a_paterno }}! Bienvenid@ al cuestionario.
-          </p>
-        </div>
-      </transition>
+        <!-- User Greeting (shown before questionnaire if relevant) -->
+        <transition name="fade">
+          <div v-if="currentStep === 'questionnaire' && academicoEncontrado" class="success-message initial-greeting">
+            <div class="success-icon">👋</div>
+            <p>
+              ¡Hola, {{ academicoEncontrado.nombre }}
+              {{ academicoEncontrado.a_paterno }}! Bienvenid@ al cuestionario.
+            </p>
+          </div>
+        </transition>
 
-      <!-- Step 4: Questionnaire -->
-      <QuestionnaireForm v-if="currentStep === 'questionnaire'" :preguntas="preguntasCuestionario"
-        :initial-respuestas="formData.respuestas" @update:respuestas="(newVal) => (formData.respuestas = newVal)"
-        :academico-info="academicoEncontrado" :external-info="!isAcademico
-          ? { name: externalRegData.name, aPaterno: externalRegData.aPaterno }
-          : null
-          " :unidades-academicas="unidadesAcademicas" :selected-unidad-id="selectedUnidadId"
-        @update:selected-unidad-id="(id) => (selectedUnidadId = id)" :is-academico="isAcademico"
-        :submit-error="internalRegistrationError" :is-submitting="isSubmitting"
-        @submit-questionnaire="handleQuestionnaireSubmission" />
+        <!-- Step 4: Questionnaire -->
+        <QuestionnaireForm v-if="currentStep === 'questionnaire'" :preguntas="preguntasCuestionario"
+          v-model:initial-respuestas="formData.respuestas" :academico-info="academicoEncontrado" :external-info="!isAcademico
+            ? {
+              name: externalRegData.name,
+              aPaterno: externalRegData.aPaterno,
+            }
+            : null
+            " :unidades-academicas="unidadesAcademicas" v-model:selected-unidad-id="selectedUnidadId"
+          :is-academico="isAcademico" :submit-error="internalRegistrationError" :is-submitting="isSubmitting"
+          @submit-questionnaire="handleQuestionnaireSubmission" />
 
-      <!-- Final Submission Success Message -->
-      <SubmissionSuccessMessage v-if="currentStep === 'submission-success'" @reset-app="resetToInitialState" />
-    </div>
+        <!-- Final Submission Success Message -->
+        <SubmissionSuccessMessage v-if="currentStep === 'submission-success'" @reset-app="resetToInitialState" />
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <!-- Footer content also moved into a new container for max-width centering -->
+      <div class="footer-inner-content">
+        <p>&copy; {{ new Date().getFullYear() }} Pontificia Universidad Católica de Valparaíso</p>
+        <p>Dirección: Av. Brasil 2950, Valparaíso, Chile</p>
+        <p>Contacto: <a href="mailto:innovacion@pucv.cl">innovacion@pucv.cl</a></p>
+      </div>
+      <!-- Optional: <div class="footer-links">...</div> could also be inside footer-inner-content -->
+    </footer>
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* General Layout */
+.welcome-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: 'Lato', sans-serif;
+  /* Apply Lato to the entire app */
+}
+
+/* Header Styles */
+.app-header {
+  background-color: #2E5C8A;
+  color: white;
+  padding: 1.2rem 0;
+  /* Aumentado el padding vertical para más altura */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+.header-inner-content {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  /* Aumentado el gap para más espacio entre logo y texto */
+  max-width: 1200px;
+  /* <--- AUMENTADO: Un ancho máximo mayor para el header */
+  margin: 0 auto;
+  padding: 0 4rem;
+  /* <--- AUMENTADO: Más padding lateral para el efecto de "más ancho" */
+  flex-wrap: nowrap;
+  /* Evita que el logo y texto se envuelvan */
+  justify-content: flex-start;
+  /* Alinea los elementos al inicio */
+}
+
+.app-header .logo {
+  height: 90px;
+  /* Aumentado la altura del logo */
+  width: auto;
+  /* <--- Mantiene el ancho automático para preservar la proporción */
+  flex-shrink: 0;
+  display: block;
+  object-fit: contain;
+}
+
+.header-text {
+  flex-grow: 1;
+  min-width: 300px;
+  /* Mínimo ancho para el texto para que no se comprima demasiado */
+}
+
+.header-text h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  /* <--- AUMENTADO: Más grande para que se vea más prominente */
+  line-height: 1.2;
+  color: white;
+  font-weight: 700;
+}
+
+.header-text .subtitle {
+  margin: 0.5rem 0 0;
+  /* Ajustado el margen */
+  font-size: 1.1rem;
+  /* Más grande para que se lea mejor */
+  opacity: 0.9;
+  color: white;
+  font-weight: 300;
+}
+
+/* Main Content Area Wrapper */
+.main-content-wrapper {
+  flex-grow: 1;
+  padding: 2.5rem 0;
+  /* <--- CAMBIO CLAVE: Aumenta padding vertical para espacio con header/footer */
+  max-width: 100%;
+  /* Ocupa todo el ancho disponible */
+  margin: 0;
+  /* Sin márgenes laterales */
+  width: 100%;
+  box-sizing: border-box;
+  color: #333;
+  display: flex;
+  /* Añadir flex para centrar los componentes si App.vue no es quien los centra */
+  justify-content: center;
+  /* Centrar horizontalmente */
+  align-items: flex-start;
+  /* Alinea al inicio verticalmente (o center si quieres el componente en el medio de la pantalla) */
+}
+
+/* Existing styles for loading/error messages, spinners, buttons, success messages */
+.loading,
+.error {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.2rem;
+  color: #555;
+  width: 100%;
+  /* Asegura que estos mensajes también se centren si el main es flex */
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.retry-btn {
+  background-color: #007bff;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-top: 1rem;
+  font-family: 'Lato', sans-serif;
+}
+
+.retry-btn:hover {
+  background-color: #0056b3;
+}
+
+.success-message {
+  padding: 1.5rem;
+  background-color: #e6ffed;
+  border: 1px solid #a8e6b9;
+  color: #1a5e2e;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.success-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Footer Styles */
+.app-footer {
+  background-color: #2E5C8A;
+  color: white;
+  padding: 0.8rem 0;
+  text-align: center;
+  border-top: 1px solid #e0e0e0;
+  font-size: 0.9rem;
+  margin-top: auto;
+  width: 100%;
+}
+
+.footer-inner-content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-inner-content p {
+  margin: 0;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.footer-inner-content p:not(:last-child)::after {
+  content: " | ";
+  white-space: pre;
+}
+
+
+.footer-inner-content a {
+  color: #c9e1f5;
+  text-decoration: none;
+}
+
+.footer-inner-content a:hover {
+  text-decoration: underline;
+}
+
+/* Adjustments for responsiveness */
+@media (max-width: 768px) {
+
+  .header-inner-content,
+  .footer-inner-content {
+    padding: 0 1rem;
+    gap: 0.5rem;
+    /* Ajustado para que el gap no sea demasiado grande en móvil */
+  }
+
+  .main-content-wrapper {
+    padding: 1.5rem 0;
+    /* Menos padding vertical en móvil */
+  }
+
+  .header-inner-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .app-header .logo {
+    height: 70px;
+    /* Ajustado el tamaño del logo para móvil */
+  }
+
+  .header-text h1 {
+    font-size: 1.6rem;
+    /* Ajustado el tamaño del título para móvil */
+  }
+
+  .header-text .subtitle {
+    font-size: 0.9rem;
+  }
+
+  .footer-inner-content {
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .footer-inner-content p {
+    white-space: normal;
+    text-overflow: unset;
+  }
+
+  .footer-inner-content p:not(:last-child)::after {
+    content: "";
+  }
+}
+
+@media (max-width: 480px) {
+
+  /* Más ajustes para pantallas muy pequeñas */
+  .app-header .logo {
+    height: 60px;
+  }
+
+  .header-text h1 {
+    font-size: 1.4rem;
+  }
+
+  .header-text .subtitle {
+    font-size: 0.8rem;
+  }
+
+  .header-inner-content {
+    padding: 0 0.8rem;
+  }
+
+  .footer-inner-content {
+    padding: 0 0.8rem;
+  }
+}
+</style>
