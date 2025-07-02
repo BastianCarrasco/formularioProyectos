@@ -20,8 +20,7 @@ const urlRespuestas = import.meta.env.VITE_API_URL_RESPUESTAS;
 // State variables (mostly unchanged, managed in App.vue)
 const isAcademico = ref(null); // true for academic, false for external
 const selectedUnidadId = ref(null); // Selected unit for academics
-// showCuestionario ya no es estrictamente necesario si currentStep lo controla
-const showCuestionario = ref(false); // Podría eliminarse o mantenerse para claridad, pero currentStep será el principal controlador
+const showCuestionario = ref(false);
 const isSubmitting = ref(false); // Used for all form submissions
 const isLoading = ref(false); // For initial data load
 const loadError = ref(null); // For initial data load error
@@ -47,9 +46,11 @@ const externalRegData = ref({
   name: "",
   aPaterno: "",
   aMaterno: "",
-  email: "",
 });
 const externalRegistrationError = ref(null);
+
+// NUEVO ESTADO: Para controlar si estamos añadiendo una nueva unidad académica
+const isAddingNewUnidad = ref(false);
 
 const unidadesAcademicas = ref([]);
 const academicos = ref([]); // Full list of academics from API
@@ -59,8 +60,6 @@ const formData = ref({
   respuestas: [], // Array to hold answers
 });
 
-// showSubmissionSuccessMessage puede seguir usándose para un control más granular si es necesario,
-// pero el currentStep ahora controlará la pantalla principal.
 const showSubmissionSuccessMessage = ref(false);
 
 // Function to load initial data (units, academics, questionnaire)
@@ -93,7 +92,8 @@ async function cargarDatos() {
   } catch (error) {
     console.error("Error al cargar datos:", error);
     loadError.value =
-      error.message || "Error al cargar los datos. Por favor intente más tarde.";
+      error.message ||
+      "Error al cargar los datos. Por favor intente más tarde.";
   } finally {
     isLoading.value = false;
   }
@@ -127,6 +127,8 @@ const resetToInitialState = () => {
     email: "",
   };
   externalRegistrationError.value = null;
+
+  isAddingNewUnidad.value = false; // Reset the new unidad state
 
   showSubmissionSuccessMessage.value = false; // Ensure final success message is hidden
   formData.value.respuestas = Array(
@@ -197,7 +199,7 @@ const handleRegisterInternalAcademic = async (regData) => {
 
     if (response.ok) {
       academicoEncontrado.value = await response.json();
-      await cargarDatos();
+      await cargarDatos(); // Recargar datos para que la nueva unidad esté en la lista
       alert(
         "¡Registro como académico interno exitoso! Ahora puede continuar y acceder al cuestionario."
       );
@@ -245,7 +247,7 @@ const handleRegisterExternalCollaborator = async (regData) => {
 
     if (response.ok) {
       academicoEncontrado.value = await response.json();
-      await cargarDatos();
+      await cargarDatos(); // Recargar datos para que la nueva unidad esté en la lista
       alert(
         "¡Registro como colaborador externo exitoso! Ahora puede continuar y acceder al cuestionario."
       );
@@ -265,6 +267,38 @@ const handleRegisterExternalCollaborator = async (regData) => {
       error.message || "Error al registrar. Por favor, inténtelo de nuevo.";
   } finally {
     isSubmitting.value = false;
+  }
+};
+
+// NUEVA FUNCIÓN: Maneja la adición de una nueva unidad académica
+// NUEVA FUNCIÓN: Maneja la adición de una nueva unidad académica
+const handleAddNewUnidad = async (nombreNuevaUnidad) => {
+  isAddingNewUnidad.value = true;
+  externalRegistrationError.value = null; // Limpiar errores previos
+  try {
+    const response = await fetch(urlUA, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: nombreNuevaUnidad }), // <--- AQUÍ ESTÁ LA CLAVE
+    });
+
+    if (response.ok) {
+      const nuevaUnidad = await response.json();
+      await cargarDatos(); // Recargar todas las unidades para asegurar que la lista esté actualizada
+
+      alert(`Unidad "${nuevaUnidad.nombre}" añadida exitosamente.`);
+    } else {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message || "Error al añadir la nueva unidad académica"
+      );
+    }
+  } catch (error) {
+    console.error("Error al añadir nueva unidad:", error);
+    externalRegistrationError.value =
+      error.message || "No se pudo añadir la unidad. Inténtelo de nuevo.";
+  } finally {
+    isAddingNewUnidad.value = false;
   }
 };
 
@@ -320,7 +354,9 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
       showCuestionario.value = false; // Esto ahora es redundante pero no hace daño
     } else {
       const errorData = await response.json();
-      throw new Error(errorData.message || "Error en el envío del cuestionario");
+      throw new Error(
+        errorData.message || "Error en el envío del cuestionario"
+      );
     }
   } catch (error) {
     internalRegistrationError.value = error.message;
@@ -367,11 +403,12 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
       <!-- Step 3b: External Collaborator Registration -->
       <ExternalCollaboratorRegistrationForm v-if="currentStep === 'external-registration'" :initial-email="email"
         :error-message="externalRegistrationError" :is-submitting="isSubmitting"
-        :unidades-academicas="unidadesAcademicas" @register-external="handleRegisterExternalCollaborator"
-        @back="resetToInitialState" />
+        :unidades-academicas="unidadesAcademicas" :is-adding-new-unidad="isAddingNewUnidad"
+        @register-external="handleRegisterExternalCollaborator" @back="resetToInitialState"
+        @add-new-unidad="handleAddNewUnidad" />
+      <!-- ^^^ NUEVA PROP Y NUEVO EMIT HANDLER AÑADIDOS AQUÍ ^^^ -->
 
       <!-- User Greeting (shown before questionnaire if relevant) -->
-      <!-- Este mensaje de saludo solo se muestra si el paso actual es 'questionnaire' -->
       <transition name="fade">
         <div v-if="currentStep === 'questionnaire' && academicoEncontrado" class="success-message initial-greeting">
           <div class="success-icon">👋</div>
@@ -383,7 +420,6 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
       </transition>
 
       <!-- Step 4: Questionnaire -->
-      <!-- El cuestionario solo se muestra si el paso actual es 'questionnaire' -->
       <QuestionnaireForm v-if="currentStep === 'questionnaire'" :preguntas="preguntasCuestionario"
         :initial-respuestas="formData.respuestas" @update:respuestas="(newVal) => (formData.respuestas = newVal)"
         :academico-info="academicoEncontrado" :external-info="!isAcademico
@@ -395,7 +431,6 @@ const handleQuestionnaireSubmission = async (validationErrorMessage = null) => {
         @submit-questionnaire="handleQuestionnaireSubmission" />
 
       <!-- Final Submission Success Message -->
-      <!-- Este mensaje solo se muestra si el paso actual es 'submission-success' -->
       <SubmissionSuccessMessage v-if="currentStep === 'submission-success'" @reset-app="resetToInitialState" />
     </div>
   </div>
